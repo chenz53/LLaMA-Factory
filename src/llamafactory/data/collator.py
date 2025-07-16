@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from peft import PeftModel
 from transformers import DataCollatorForSeq2Seq
 
-from ..extras.constants import AUDIO_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER
+from ..extras.constants import AUDIO_PLACEHOLDER, EMBEDDING_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER
 from ..extras.packages import is_pillow_available
 
 
@@ -106,18 +106,21 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             self.get_rope_func = None
 
     def __call__(self, features: list[dict[str, Any]]) -> dict[str, "torch.Tensor"]:
-        batch_images, batch_videos, batch_audios = [], [], []
-        batch_imglens, batch_vidlens, batch_audlens, batch_input_ids = [], [], [], []
+        batch_images, batch_videos, batch_audios, batch_embeddings = [], [], [], []
+        batch_imglens, batch_vidlens, batch_audlens, batch_embedlens, batch_input_ids = [], [], [], [], []
         for feature in features:
             images = feature.pop("images", None) or []
             videos = feature.pop("videos", None) or []
             audios = feature.pop("audios", None) or []
+            embeddings = feature.pop("embeddings", None) or []
             batch_images.extend(images)
             batch_videos.extend(videos)
             batch_audios.extend(audios)
+            batch_embeddings.extend(embeddings)
             batch_imglens.append(len(images))
             batch_vidlens.append(len(videos))
             batch_audlens.append(len(audios))
+            batch_embedlens.append(len(embeddings))
             batch_input_ids.append(feature["input_ids"])
 
         fake_input_ids = []
@@ -127,11 +130,11 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             fake_messages = [{"role": "user", "content": IMAGE_PLACEHOLDER}]
             fake_images = [Image.new("RGB", (64, 64), (255, 255, 255))]
             fake_messages = self.template.mm_plugin.process_messages(
-                fake_messages, fake_images, [], [], self.processor
+                fake_messages, fake_images, [], [], [], self.processor
             )
             _fake_input_ids = self.tokenizer.encode(fake_messages[0]["content"], add_special_tokens=False)
             _fake_input_ids, _ = self.template.mm_plugin.process_token_ids(
-                _fake_input_ids, None, fake_images, [], [], self.tokenizer, self.processor
+                _fake_input_ids, None, fake_images, [], [], [], self.tokenizer, self.processor
             )
             fake_input_ids.extend(_fake_input_ids)
             batch_images = fake_images
@@ -143,15 +146,31 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             fake_messages = [{"role": "user", "content": AUDIO_PLACEHOLDER}]
             fake_audios = [np.zeros(1600)]
             fake_messages = self.template.mm_plugin.process_messages(
-                fake_messages, [], [], fake_audios, self.processor
+                fake_messages, [], [], fake_audios, [], self.processor
             )
             _fake_input_ids = self.tokenizer.encode(fake_messages[0]["content"], add_special_tokens=False)
             _fake_input_ids, _ = self.template.mm_plugin.process_token_ids(
-                _fake_input_ids, None, [], [], fake_audios, self.tokenizer, self.processor
+                _fake_input_ids, None, [], [], fake_audios, [], self.tokenizer, self.processor
             )
             fake_input_ids.extend(_fake_input_ids)
             batch_audios = fake_audios
             batch_audlens[0] = 1
+
+        if (
+            self.template.mm_plugin.embedding_token is not None and sum(batch_embedlens) == 0
+        ):  # avoid process hanging in zero3/fsdp case
+            fake_messages = [{"role": "user", "content": EMBEDDING_PLACEHOLDER}]
+            fake_embeddings = [{"embedding": [[0.0] * 768], "shape": [1, 768]}]  # Simple fake embedding
+            fake_messages = self.template.mm_plugin.process_messages(
+                fake_messages, [], [], [], fake_embeddings, self.processor
+            )
+            _fake_input_ids = self.tokenizer.encode(fake_messages[0]["content"], add_special_tokens=False)
+            _fake_input_ids, _ = self.template.mm_plugin.process_token_ids(
+                _fake_input_ids, None, [], [], [], fake_embeddings, self.tokenizer, self.processor
+            )
+            fake_input_ids.extend(_fake_input_ids)
+            batch_embeddings = fake_embeddings
+            batch_embedlens[0] = 1
 
         if len(fake_input_ids) != 0:
             if self.tokenizer.padding_side == "right":
@@ -169,9 +188,11 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             batch_images,
             batch_videos,
             batch_audios,
+            batch_embeddings,
             batch_imglens,
             batch_vidlens,
             batch_audlens,
+            batch_embedlens,
             batch_input_ids,
             self.processor,
         )
@@ -272,6 +293,7 @@ class PairwiseDataCollatorWithPadding(MultiModalDataCollatorForSeq2Seq):
                     "images": feature["images"],
                     "videos": feature["videos"],
                     "audios": feature["audios"],
+                    "embeddings": feature["embeddings"],
                 }
                 concatenated_features.append(target_feature)
 

@@ -22,7 +22,7 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from io import BytesIO
-from typing import TYPE_CHECKING, BinaryIO, Literal, Optional, TypedDict, Union
+from typing import TYPE_CHECKING, Any, BinaryIO, Literal, Optional, TypedDict, Union
 
 import numpy as np
 import torch
@@ -33,7 +33,7 @@ from transformers.models.mllama.processing_mllama import (
 )
 from typing_extensions import override
 
-from ..extras.constants import AUDIO_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER, VIDEO_PLACEHOLDER
+from ..extras.constants import AUDIO_PLACEHOLDER, EMBEDDING_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER, VIDEO_PLACEHOLDER
 from ..extras.packages import (
     is_librosa_available,
     is_pillow_available,
@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     ImageInput = Union[str, bytes, EncodedImage, BinaryIO, ImageObject]
     VideoInput = Union[str, BinaryIO, list[list[ImageInput]]]
     AudioInput = Union[str, BinaryIO, NDArray]
+    EmbeddingInput = Union[str, dict[str, Any]]  # JSON file path or dictionary with embedding data
 
     class MMProcessor(ProcessorMixin):
         patch_size: int
@@ -142,6 +143,7 @@ class MMPluginMixin:
     image_token: Optional[str]
     video_token: Optional[str]
     audio_token: Optional[str]
+    embedding_token: Optional[str]
     expand_mm_tokens: bool = True
 
     def _validate_input(
@@ -150,6 +152,7 @@ class MMPluginMixin:
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
     ) -> None:
         r"""Validate if this model accepts the input modalities."""
         image_processor: BaseImageProcessor = getattr(processor, "image_processor", None)
@@ -172,6 +175,11 @@ class MMPluginMixin:
                 "This model does not support audio input. Please check whether the correct `template` is used."
             )
 
+        if len(embeddings) != 0 and self.embedding_token is None:
+            raise ValueError(
+                "This model does not support embedding input. Please check whether the correct `template` is used."
+            )
+
         if self.image_token is not None and processor is None:
             raise ValueError("Processor was not found, please check and update your model file.")
 
@@ -190,13 +198,15 @@ class MMPluginMixin:
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
     ):
-        r"""Validate if the number of images, videos and audios match the number of placeholders in messages."""
-        num_image_tokens, num_video_tokens, num_audio_tokens = 0, 0, 0
+        r"""Validate if the number of images, videos, audios and embeddings match the number of placeholders in messages."""
+        num_image_tokens, num_video_tokens, num_audio_tokens, num_embedding_tokens = 0, 0, 0, 0
         for message in messages:
             num_image_tokens += message["content"].count(IMAGE_PLACEHOLDER)
             num_video_tokens += message["content"].count(VIDEO_PLACEHOLDER)
             num_audio_tokens += message["content"].count(AUDIO_PLACEHOLDER)
+            num_embedding_tokens += message["content"].count(EMBEDDING_PLACEHOLDER)
 
         if len(images) != num_image_tokens:
             raise ValueError(
@@ -211,6 +221,11 @@ class MMPluginMixin:
         if len(audios) != num_audio_tokens:
             raise ValueError(
                 f"The number of audios does not match the number of {AUDIO_PLACEHOLDER} tokens in {messages}."
+            )
+
+        if len(embeddings) != num_embedding_tokens:
+            raise ValueError(
+                f"The number of embeddings does not match the number of {EMBEDDING_PLACEHOLDER} tokens in {messages}."
             )
 
     def _preprocess_image(
@@ -303,11 +318,46 @@ class MMPluginMixin:
 
         return {"audios": results, "sampling_rates": sampling_rates}
 
+    def _regularize_embeddings(
+        self, embeddings: list["EmbeddingInput"], **kwargs
+    ) -> dict[str, Union[list["torch.Tensor"], list[tuple[int, int]]]]:
+        r"""Regularizes embeddings by loading from JSON files and converting to tensors."""
+        import json
+        
+        results, shapes = [], []
+        for embedding in embeddings:
+            if isinstance(embedding, dict):
+                # Already a dictionary with embedding data
+                embedding_data = embedding
+            else:
+                # Load from JSON file path
+                with open(embedding, 'r') as f:
+                    embedding_data = json.load(f)
+            
+            if "embedding" not in embedding_data:
+                raise ValueError(f"Expected 'embedding' key in embedding data: {embedding_data.keys()}")
+            
+            embedding_tensor = torch.tensor(embedding_data["embedding"], dtype=torch.float32)
+            
+            # Get shape if provided, otherwise infer from tensor
+            if "shape" in embedding_data:
+                shape = tuple(embedding_data["shape"])
+                if embedding_tensor.shape != shape:
+                    embedding_tensor = embedding_tensor.reshape(shape)
+            else:
+                shape = embedding_tensor.shape
+            
+            results.append(embedding_tensor)
+            shapes.append(shape)
+        
+        return {"embeddings": results, "shapes": shapes}
+
     def _get_mm_inputs(
         self,
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
         processor: "MMProcessor",
         imglens: Optional[list[int]] = None,
     ) -> dict[str, "torch.Tensor"]:
@@ -387,6 +437,15 @@ class MMPluginMixin:
             )
             mm_inputs["feature_attention_mask"] = mm_inputs.pop("attention_mask", None)  # prevent conflicts
 
+        if len(embeddings) != 0:
+            embedding_data = self._regularize_embeddings(embeddings)
+            embedding_tensors = embedding_data["embeddings"]
+            
+            # For now, just add the embeddings as they are. Specific models can override
+            # this method to handle embeddings according to their requirements
+            mm_inputs["embeddings"] = torch.stack(embedding_tensors) if len(embedding_tensors) > 1 else embedding_tensors[0]
+            mm_inputs["embedding_shapes"] = embedding_data["shapes"]
+
         return mm_inputs
 
 
@@ -398,10 +457,11 @@ class BasePlugin(MMPluginMixin):
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
         processor: Optional["MMProcessor"],
     ) -> list[dict[str, str]]:
         r"""Pre-process input messages before tokenization for VLMs."""
-        self._validate_input(processor, images, videos, audios)
+        self._validate_input(processor, images, videos, audios, embeddings)
         return messages
 
     def process_token_ids(
@@ -411,11 +471,12 @@ class BasePlugin(MMPluginMixin):
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
         tokenizer: "PreTrainedTokenizer",
         processor: Optional["MMProcessor"],
     ) -> tuple[list[int], Optional[list[int]]]:
         r"""Pre-process token ids after tokenization for VLMs."""
-        self._validate_input(processor, images, videos, audios)
+        self._validate_input(processor, images, videos, audios, embeddings)
         return input_ids, labels
 
     def get_mm_inputs(
@@ -423,9 +484,11 @@ class BasePlugin(MMPluginMixin):
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
         imglens: list[int],
         vidlens: list[int],
         audlens: list[int],
+        embedlens: list[int],
         batch_ids: list[list[int]],
         processor: Optional["MMProcessor"],
     ) -> dict[str, Union[list[int], "torch.Tensor"]]:
@@ -435,15 +498,17 @@ class BasePlugin(MMPluginMixin):
             images: a list of image inputs, shape (num_images,)
             videos: a list of video inputs, shape (num_videos,)
             audios: a list of audio inputs, shape (num_audios,)
+            embeddings: a list of embedding inputs, shape (num_embeddings,)
             imglens: number of images in each sample, shape (batch_size,)
             vidlens: number of videos in each sample, shape (batch_size,)
             audlens: number of audios in each sample, shape (batch_size,)
+            embedlens: number of embeddings in each sample, shape (batch_size,)
             batch_ids: token ids of input samples, shape (batch_size, seq_len)
-            processor: a processor for pre-processing images and videos
+            processor: a processor for pre-processing images, videos, audios, and embeddings
 
         """
-        self._validate_input(processor, images, videos, audios)
-        return self._get_mm_inputs(images, videos, audios, processor)
+        self._validate_input(processor, images, videos, audios, embeddings)
+        return self._get_mm_inputs(images, videos, audios, embeddings, processor)
 
 
 @dataclass

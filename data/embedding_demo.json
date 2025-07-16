@@ -1,0 +1,48 @@
+[
+  {
+    "messages": [
+      {
+        "content": "<embedding>What does this text embedding represent?",
+        "role": "user"
+      },
+      {
+        "content": "This embedding represents a simple greeting text 'Hello, world!' with 2 tokens and 8-dimensional vectors.",
+        "role": "assistant"
+      }
+    ],
+    "embeddings": [
+      "embedding_demo_data/sample_embedding_1.json"
+    ]
+  },
+  {
+    "messages": [
+      {
+        "content": "<embedding>Analyze this document embedding for me.",
+        "role": "user"
+      },
+      {
+        "content": "This embedding represents a document about machine learning concepts with 3 tokens and 8-dimensional vectors. The embedding structure shows semantic relationships between different concepts.",
+        "role": "assistant"
+      }
+    ],
+    "embeddings": [
+      "embedding_demo_data/sample_embedding_2.json"
+    ]
+  },
+  {
+    "messages": [
+      {
+        "content": "Compare these two embeddings: <embedding> and <embedding>",
+        "role": "user"
+      },
+      {
+        "content": "The first embedding represents a simple greeting text with ascending values, while the second represents machine learning concepts with more complex patterns. They have different token lengths (2 vs 3) but the same embedding dimension (8).",
+        "role": "assistant"
+      }
+    ],
+    "embeddings": [
+      "embedding_demo_data/sample_embedding_1.json",
+      "embedding_demo_data/sample_embedding_2.json"
+    ]
+  }
+] 

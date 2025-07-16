@@ -43,6 +43,7 @@ class DatasetAttr:
     images: Optional[str] = None
     videos: Optional[str] = None
     audios: Optional[str] = None
+    embeddings: Optional[str] = None
     # dpo columns
     chosen: Optional[str] = None
     rejected: Optional[str] = None

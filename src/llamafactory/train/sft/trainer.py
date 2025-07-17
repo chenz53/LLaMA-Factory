@@ -100,7 +100,17 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
     @override
     def compute_loss(self, model, inputs, *args, **kwargs):
+        # Add batch debugging prints
+        self._debug_print_batch(inputs)
         return super().compute_loss(model, inputs, *args, **kwargs)
+
+    def _debug_print_batch(self, inputs: dict[str, Any]) -> None:
+        """Simply print each field of the batch at rank0 only."""
+        if hasattr(self, "is_world_process_zero") and self.is_world_process_zero():
+            print("\n=== DEBUG BATCH ===")
+            for key, value in inputs.items():
+                print(f"{key}: {value}")
+            print("===================\n")
 
     @override
     def prediction_step(

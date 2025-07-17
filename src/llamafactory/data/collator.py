@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from peft import PeftModel
 from transformers import DataCollatorForSeq2Seq
 
-from ..extras.constants import AUDIO_PLACEHOLDER, EMBEDDING_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER
+from ..extras.constants import AUDIO_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER, MULTIMODAL_EMBEDDING_PLACEHOLDERS
 from ..extras.packages import is_pillow_available
 
 
@@ -157,10 +157,12 @@ class MultiModalDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
             batch_audlens[0] = 1
 
         if (
-            self.template.mm_plugin.embedding_token is not None and sum(batch_embedlens) == 0
-        ):  # avoid process hanging in zero3/fsdp case
-            fake_messages = [{"role": "user", "content": EMBEDDING_PLACEHOLDER}]
-            fake_embeddings = [{"embedding": [[0.0] * 768], "shape": [1, 768]}]  # Simple fake embedding
+            self.template.mm_plugin.embedding_tokens is not None and len(self.template.mm_plugin.embedding_tokens) > 0
+        ) and sum(batch_embedlens) == 0:  # avoid process hanging in zero3/fsdp case
+            # Use the first available embedding placeholder
+            first_placeholder = next(iter(MULTIMODAL_EMBEDDING_PLACEHOLDERS.values()))
+            fake_messages = [{"role": "user", "content": first_placeholder}]
+            fake_embeddings = [{"m1": [[0.0] * 768], "shape": [1, 768]}]  # Simple fake embedding with new format
             fake_messages = self.template.mm_plugin.process_messages(
                 fake_messages, [], [], [], fake_embeddings, self.processor
             )

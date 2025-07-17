@@ -21,7 +21,7 @@ from .processor_utils import DatasetProcessor, infer_seqlen
 
 
 if TYPE_CHECKING:
-    from ..mm_plugin import AudioInput, ImageInput, VideoInput
+    from ..mm_plugin import AudioInput, EmbeddingInput, ImageInput, VideoInput
 
 
 logger = logging.get_logger(__name__)

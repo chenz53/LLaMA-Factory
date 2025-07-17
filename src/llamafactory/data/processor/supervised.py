@@ -22,7 +22,7 @@ from .processor_utils import DatasetProcessor, greedy_knapsack, infer_seqlen
 
 
 if TYPE_CHECKING:
-    from ..mm_plugin import AudioInput, ImageInput, VideoInput
+    from ..mm_plugin import AudioInput, EmbeddingInput, ImageInput, VideoInput
 
 
 logger = logging.get_logger(__name__)
@@ -39,10 +39,11 @@ class SupervisedDatasetProcessor(DatasetProcessor):
         images: list["ImageInput"],
         videos: list["VideoInput"],
         audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
     ) -> tuple[list[int], list[int]]:
-        messages = self.template.mm_plugin.process_messages(prompt + response, images, videos, audios, self.processor)
+        messages = self.template.mm_plugin.process_messages(prompt + response, images, videos, audios, embeddings, self.processor)
         input_ids, labels = self.template.mm_plugin.process_token_ids(
-            [], [], images, videos, audios, self.tokenizer, self.processor
+            [], [], images, videos, audios, embeddings, self.tokenizer, self.processor
         )
         encoded_pairs = self.template.encode_multiturn(self.tokenizer, messages, system, tools)
         total_length = len(input_ids) + (1 if self.template.efficient_eos else 0)
@@ -104,6 +105,7 @@ class SupervisedDatasetProcessor(DatasetProcessor):
                 images=examples["_images"][i] or [],
                 videos=examples["_videos"][i] or [],
                 audios=examples["_audios"][i] or [],
+                embeddings=examples["_embeddings"][i] or [],
             )
             model_inputs["input_ids"].append(input_ids)
             model_inputs["attention_mask"].append([1] * len(input_ids))
@@ -111,6 +113,7 @@ class SupervisedDatasetProcessor(DatasetProcessor):
             model_inputs["images"].append(examples["_images"][i])
             model_inputs["videos"].append(examples["_videos"][i])
             model_inputs["audios"].append(examples["_audios"][i])
+            model_inputs["embeddings"].append(examples["_embeddings"][i])
 
         return model_inputs
 
@@ -120,6 +123,7 @@ class SupervisedDatasetProcessor(DatasetProcessor):
         print("inputs:\n{}".format(self.tokenizer.decode(example["input_ids"], skip_special_tokens=False)))
         print("label_ids:\n{}".format(example["labels"]))
         print(f"labels:\n{self.tokenizer.decode(valid_labels, skip_special_tokens=False)}")
+        print(f"embeddings:\n{example['embeddings']}")
 
 
 @dataclass
@@ -129,7 +133,7 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
         # build inputs with format `<bos> X1 Y1 <eos> <bos> X2 Y2 <eos>`
         # and labels with format `<ignore> ... <ignore> Y1 <eos> <ignore> ... <ignore> Y2 <eos>`
         valid_num = 0
-        batch_input_ids, batch_labels, batch_images, batch_videos, batch_audios = [], [], [], [], []
+        batch_input_ids, batch_labels, batch_images, batch_videos, batch_audios, batch_embeddings = [], [], [], [], [], []
         lengths = []
         length2indexes = defaultdict(list)
         for i in range(len(examples["_prompt"])):
@@ -147,6 +151,7 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                 images=examples["_images"][i] or [],
                 videos=examples["_videos"][i] or [],
                 audios=examples["_audios"][i] or [],
+                embeddings=examples["_embeddings"][i] or [],
             )
             length = len(input_ids)
             if length > self.data_args.cutoff_len:
@@ -159,13 +164,14 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                 batch_images.append(examples["_images"][i] or [])
                 batch_videos.append(examples["_videos"][i] or [])
                 batch_audios.append(examples["_audios"][i] or [])
+                batch_embeddings.append(examples["_embeddings"][i] or [])
                 valid_num += 1
 
         model_inputs = defaultdict(list)
         knapsacks = greedy_knapsack(lengths, self.data_args.cutoff_len)
         for knapsack in knapsacks:
             packed_input_ids, packed_attention_masks, packed_position_ids, packed_labels = [], [], [], []
-            packed_images, packed_videos, packed_audios = [], [], []
+            packed_images, packed_videos, packed_audios, packed_embeddings = [], [], [], []
             for i, length in enumerate(knapsack):
                 index = length2indexes[length].pop()
                 packed_input_ids += batch_input_ids[index]
@@ -174,6 +180,7 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
                 packed_images += batch_images[index]
                 packed_videos += batch_videos[index]
                 packed_audios += batch_audios[index]
+                packed_embeddings += batch_embeddings[index]
                 if self.data_args.neat_packing:
                     packed_attention_masks += [i + 1] * len(batch_input_ids[index])  # start from 1
                 else:
@@ -199,5 +206,6 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
             model_inputs["images"].append(packed_images or None)
             model_inputs["videos"].append(packed_videos or None)
             model_inputs["audios"].append(packed_audios or None)
+            model_inputs["embeddings"].append(packed_embeddings or None)
 
         return model_inputs

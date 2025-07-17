@@ -33,7 +33,14 @@ from transformers.models.mllama.processing_mllama import (
 )
 from typing_extensions import override
 
-from ..extras.constants import AUDIO_PLACEHOLDER, EMBEDDING_PLACEHOLDER, IGNORE_INDEX, IMAGE_PLACEHOLDER, VIDEO_PLACEHOLDER
+from ..extras.constants import (
+    AUDIO_PLACEHOLDER,
+    IGNORE_INDEX,
+    IMAGE_PLACEHOLDER,
+    MULTIMODAL_EMBEDDING_PLACEHOLDERS,
+    PLACEHOLDER_TO_EMBEDDING_KEY,
+    VIDEO_PLACEHOLDER,
+)
 from ..extras.packages import (
     is_librosa_available,
     is_pillow_available,
@@ -143,7 +150,7 @@ class MMPluginMixin:
     image_token: Optional[str]
     video_token: Optional[str]
     audio_token: Optional[str]
-    embedding_token: Optional[str]
+    embedding_tokens: Optional[dict[str, str]] = None  # Multi-modal embedding tokens
     expand_mm_tokens: bool = True
 
     def _validate_input(
@@ -175,7 +182,7 @@ class MMPluginMixin:
                 "This model does not support audio input. Please check whether the correct `template` is used."
             )
 
-        if len(embeddings) != 0 and self.embedding_token is None:
+        if len(embeddings) != 0 and (self.embedding_tokens is None or len(self.embedding_tokens) == 0):
             raise ValueError(
                 "This model does not support embedding input. Please check whether the correct `template` is used."
             )
@@ -206,7 +213,9 @@ class MMPluginMixin:
             num_image_tokens += message["content"].count(IMAGE_PLACEHOLDER)
             num_video_tokens += message["content"].count(VIDEO_PLACEHOLDER)
             num_audio_tokens += message["content"].count(AUDIO_PLACEHOLDER)
-            num_embedding_tokens += message["content"].count(EMBEDDING_PLACEHOLDER)
+            # Count all multimodal embedding placeholders
+            for placeholder in MULTIMODAL_EMBEDDING_PLACEHOLDERS.values():
+                num_embedding_tokens += message["content"].count(placeholder)
 
         if len(images) != num_image_tokens:
             raise ValueError(
@@ -223,9 +232,11 @@ class MMPluginMixin:
                 f"The number of audios does not match the number of {AUDIO_PLACEHOLDER} tokens in {messages}."
             )
 
+        print(f"embeddings: {embeddings}")
+        print(f"num_embedding_tokens: {num_embedding_tokens}")
         if len(embeddings) != num_embedding_tokens:
             raise ValueError(
-                f"The number of embeddings does not match the number of {EMBEDDING_PLACEHOLDER} tokens in {messages}."
+                f"The number of embeddings does not match the number of multimodal embedding tokens in {messages}."
             )
 
     def _preprocess_image(
@@ -320,25 +331,77 @@ class MMPluginMixin:
 
     def _regularize_embeddings(
         self, embeddings: list["EmbeddingInput"], **kwargs
-    ) -> dict[str, Union[list["torch.Tensor"], list[tuple[int, int]]]]:
-        r"""Regularizes embeddings by loading from JSON files and converting to tensors."""
+    ) -> dict[str, Union[list["torch.Tensor"], list[tuple[int, int]], dict[str, list["torch.Tensor"]]]]:
+        r"""Regularizes embeddings by loading from JSON files and converting to tensors.
+
+        Supports multi-modal embedding keys (m1, m2, m3, etc.) from dataset level.
+        """
         import json
-        
+
         results, shapes = [], []
+        embedding_types = []  # Track which embedding key was used for each embedding
+
         for embedding in embeddings:
+            modality_key = None
+            embedding_data = None
+
             if isinstance(embedding, dict):
-                # Already a dictionary with embedding data
-                embedding_data = embedding
+                if "file" in embedding and "modality_key" in embedding:
+                    # New format with modality information
+                    modality_key = embedding["modality_key"]
+                    embedding_file = embedding["file"]
+
+                    # Load from JSON file
+                    with open(embedding_file, "rb") as f:
+                        embedding_data = json.load(f)
+                else:
+                    # Already a dictionary with embedding data (direct format)
+                    embedding_data = embedding
             else:
-                # Load from JSON file path
-                with open(embedding, 'r') as f:
+                # Load from JSON file path (legacy format)
+                with open(embedding, "rb") as f:
                     embedding_data = json.load(f)
-            
-            if "embedding" not in embedding_data:
-                raise ValueError(f"Expected 'embedding' key in embedding data: {embedding_data.keys()}")
-            
-            embedding_tensor = torch.tensor(embedding_data["embedding"], dtype=torch.float32)
-            
+
+            # Extract embedding tensor - embedding files use "embedding" key internally
+            if "embedding" in embedding_data:
+                embedding_tensor = torch.tensor(embedding_data["embedding"], dtype=torch.float32)
+
+                # Use modality key if available, otherwise try to infer from file or use generic
+                if modality_key:
+                    detected_key = modality_key
+                else:
+                    # Try to detect from multimodal keys in data (fallback)
+                    detected_key = None
+                    for key in sorted(embedding_data.keys()):
+                        if key.startswith("m") and key[1:].isdigit():
+                            detected_key = key
+                            embedding_tensor = torch.tensor(embedding_data[key], dtype=torch.float32)
+                            break
+
+                    if detected_key is None:
+                        # Default to using "embedding" key
+                        detected_key = "embedding"
+            else:
+                # Fallback to looking for multimodal keys in the data
+                detected_key = None
+                for key in sorted(embedding_data.keys()):
+                    if key.startswith("m") and key[1:].isdigit():
+                        detected_key = key
+                        embedding_tensor = torch.tensor(embedding_data[key], dtype=torch.float32)
+                        break
+
+                if detected_key is None:
+                    available_keys = [k for k in embedding_data.keys() if k.startswith("m") and k[1:].isdigit()]
+                    if "embedding" in embedding_data:
+                        available_keys.append("embedding")
+
+                    if not available_keys:
+                        raise ValueError(
+                            f"No valid embedding key found in embedding data. Expected 'embedding' key or keys like 'm1', 'm2', etc. Available keys: {list(embedding_data.keys())}"
+                        )
+                    else:
+                        raise ValueError(f"No valid embedding key found in embedding data: {embedding_data.keys()}")
+
             # Get shape if provided, otherwise infer from tensor
             if "shape" in embedding_data:
                 shape = tuple(embedding_data["shape"])
@@ -346,11 +409,12 @@ class MMPluginMixin:
                     embedding_tensor = embedding_tensor.reshape(shape)
             else:
                 shape = embedding_tensor.shape
-            
+
             results.append(embedding_tensor)
             shapes.append(shape)
-        
-        return {"embeddings": results, "shapes": shapes}
+            embedding_types.append(detected_key)
+
+        return {"embeddings": results, "shapes": shapes, "embedding_types": embedding_types}
 
     def _get_mm_inputs(
         self,
@@ -440,11 +504,38 @@ class MMPluginMixin:
         if len(embeddings) != 0:
             embedding_data = self._regularize_embeddings(embeddings)
             embedding_tensors = embedding_data["embeddings"]
-            
-            # For now, just add the embeddings as they are. Specific models can override
-            # this method to handle embeddings according to their requirements
-            mm_inputs["embeddings"] = torch.stack(embedding_tensors) if len(embedding_tensors) > 1 else embedding_tensors[0]
+            embedding_types = embedding_data["embedding_types"]
+
+            # Group embeddings by their type for better organization
+            embeddings_by_type = {}
+            shapes_by_type = {}
+
+            for tensor, shape, embedding_type in zip(embedding_tensors, embedding_data["shapes"], embedding_types):
+                if embedding_type not in embeddings_by_type:
+                    embeddings_by_type[embedding_type] = []
+                    shapes_by_type[embedding_type] = []
+                embeddings_by_type[embedding_type].append(tensor)
+                shapes_by_type[embedding_type].append(shape)
+
+            # Create properly formatted multimodal embeddings dictionary
+            # Each modality (m1, m2, etc.) gets its own stacked tensor
+            multimodal_embeddings = {}
+            for embedding_type, tensors in embeddings_by_type.items():
+                if len(tensors) > 1:
+                    # Concatenate embeddings within the same modality
+                    multimodal_embeddings[embedding_type] = torch.cat(tensors, dim=0)
+                else:
+                    # Single embedding for this modality
+                    multimodal_embeddings[embedding_type] = tensors[0]
+
+            # Use the new multimodal format as the main embeddings field
+            mm_inputs["embeddings"] = multimodal_embeddings
             mm_inputs["embedding_shapes"] = embedding_data["shapes"]
+
+            # Keep additional metadata for backward compatibility and debugging
+            mm_inputs["embeddings_by_type"] = embeddings_by_type
+            mm_inputs["shapes_by_type"] = shapes_by_type
+            mm_inputs["embedding_types"] = embedding_types
 
         return mm_inputs
 
@@ -1934,6 +2025,61 @@ class VideoLlavaPlugin(BasePlugin):
         return messages
 
 
+@dataclass
+class Qwen3EmbeddingPlugin(BasePlugin):
+    @override
+    def process_messages(
+        self,
+        messages: list[dict[str, str]],
+        images: list["ImageInput"],
+        videos: list["VideoInput"],
+        audios: list["AudioInput"],
+        embeddings: list["EmbeddingInput"],
+        processor: Optional["MMProcessor"],
+    ) -> list[dict[str, str]]:
+        self._validate_input(processor, images, videos, audios, embeddings)
+        self._validate_messages(messages, images, videos, audios, embeddings)
+        num_embedding_tokens = 0
+        messages = deepcopy(messages)
+
+        if self.expand_mm_tokens:
+            mm_inputs = self._get_mm_inputs(images, videos, audios, embeddings, processor)
+            embedding_shapes = mm_inputs.get("embedding_shapes", [])
+        else:
+            embedding_shapes = [None] * len(embeddings)
+
+        for message in messages:
+            content = message["content"]
+            # Process all multimodal embedding placeholders
+            for placeholder in MULTIMODAL_EMBEDDING_PLACEHOLDERS.values():
+                while placeholder in content:
+                    if self.expand_mm_tokens and num_embedding_tokens < len(embedding_shapes):
+                        # Use actual embedding shape for token count
+                        embedding_shape = embedding_shapes[num_embedding_tokens]
+                        if embedding_shape is not None:
+                            embedding_seqlen = embedding_shape[0]  # num_tokens dimension
+                        else:
+                            embedding_seqlen = 1
+                    else:
+                        embedding_seqlen = 1
+
+                    # Get the corresponding embedding token from embedding_tokens
+                    embedding_key = PLACEHOLDER_TO_EMBEDDING_KEY.get(placeholder)
+                    if embedding_key and self.embedding_tokens and embedding_key in self.embedding_tokens:
+                        embedding_token = self.embedding_tokens[embedding_key]
+                    else:
+                        embedding_token = placeholder  # Fallback to placeholder itself
+
+                    content = content.replace(
+                        placeholder,
+                        f"<|{embedding_key}_start|>{embedding_token * embedding_seqlen}<|{embedding_key}_end|>",
+                        1,
+                    )
+                    num_embedding_tokens += 1
+            message["content"] = content
+        return messages
+
+
 PLUGINS = {
     "base": BasePlugin,
     "gemma3": Gemma3Plugin,
@@ -1952,6 +2098,7 @@ PLUGINS = {
     "qwen2_audio": Qwen2AudioPlugin,
     "qwen2_omni": Qwen2OmniPlugin,
     "qwen2_vl": Qwen2VLPlugin,
+    "qwen3_embedding": Qwen3EmbeddingPlugin,
     "video_llava": VideoLlavaPlugin,
 }
 
@@ -1969,9 +2116,12 @@ def get_mm_plugin(
     image_token: Optional[str] = None,
     video_token: Optional[str] = None,
     audio_token: Optional[str] = None,
+    embedding_tokens: Optional[dict[str, str]] = None,
 ) -> "BasePlugin":
     r"""Get plugin for multimodal inputs."""
     if name not in PLUGINS:
         raise ValueError(f"Multimodal plugin `{name}` not found.")
 
-    return PLUGINS[name](image_token, video_token, audio_token)
+    plugin = PLUGINS[name](image_token, video_token, audio_token, embedding_tokens)
+
+    return plugin

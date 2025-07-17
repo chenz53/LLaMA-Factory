@@ -75,6 +75,40 @@ class DatasetConverter:
 
         return medias
 
+    def _find_embeddings_with_modality(self, embedding_data: Optional[dict]) -> Optional[list[dict]]:
+        r"""Process embeddings while preserving modality information."""
+        if embedding_data is None:
+            return None
+
+        embeddings = []
+        for modality_key, embedding_files in embedding_data.items():
+            if modality_key.startswith("m") and modality_key[1:].isdigit():
+                # This is a multimodal embedding key (m1, m2, etc.)
+                if not isinstance(embedding_files, list):
+                    embedding_files = [embedding_files]
+
+                for embedding_file in embedding_files:
+                    # Skip None values
+                    if embedding_file is None:
+                        continue
+
+                    # Process file paths similar to _find_medias
+                    if self.dataset_attr.load_from in ["script", "file"]:
+                        # Ensure media_dir is set, fallback to dataset_dir if None
+                        media_dir = self.data_args.media_dir or self.data_args.dataset_dir
+                        media_path = os.path.join(media_dir, embedding_file)
+                        if os.path.isfile(media_path):
+                            embedding_file = media_path
+                        else:
+                            logger.warning_rank0_once(
+                                f"Embedding {embedding_file} does not exist in `media_dir`. Use original path."
+                            )
+
+                    # Create embedding entry with modality information
+                    embeddings.append({"file": embedding_file, "modality_key": modality_key})
+
+        return embeddings if embeddings else None
+
     @abstractmethod
     def __call__(self, example: dict[str, Any]) -> dict[str, Any]:
         r"""Convert a single example in the dataset to the standard format."""
@@ -127,7 +161,9 @@ class AlpacaDatasetConverter(DatasetConverter):
             "_images": self._find_medias(example[self.dataset_attr.images]) if self.dataset_attr.images else None,
             "_videos": self._find_medias(example[self.dataset_attr.videos]) if self.dataset_attr.videos else None,
             "_audios": self._find_medias(example[self.dataset_attr.audios]) if self.dataset_attr.audios else None,
-            "_embeddings": self._find_medias(example[self.dataset_attr.embeddings]) if self.dataset_attr.embeddings else None,
+            "_embeddings": self._find_embeddings_with_modality(example[self.dataset_attr.embeddings])
+            if self.dataset_attr.embeddings
+            else None,
         }
         return output
 
@@ -224,7 +260,9 @@ class SharegptDatasetConverter(DatasetConverter):
             "_images": self._find_medias(example[self.dataset_attr.images]) if self.dataset_attr.images else None,
             "_videos": self._find_medias(example[self.dataset_attr.videos]) if self.dataset_attr.videos else None,
             "_audios": self._find_medias(example[self.dataset_attr.audios]) if self.dataset_attr.audios else None,
-            "_embeddings": self._find_medias(example[self.dataset_attr.embeddings]) if self.dataset_attr.embeddings else None,
+            "_embeddings": self._find_embeddings_with_modality(example[self.dataset_attr.embeddings])
+            if self.dataset_attr.embeddings
+            else None,
         }
         return output
 

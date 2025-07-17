@@ -24,7 +24,22 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME, WEIGH
 
 AUDIO_PLACEHOLDER = os.getenv("AUDIO_PLACEHOLDER", "<audio>")
 
-EMBEDDING_PLACEHOLDER = os.getenv("EMBEDDING_PLACEHOLDER", "<embedding>")
+# Multi-modal embedding placeholders
+MULTIMODAL_EMBEDDING_PLACEHOLDERS = {
+    "m1": os.getenv("M1_PLACEHOLDER", "<m1>"),
+    "m2": os.getenv("M2_PLACEHOLDER", "<m2>"),
+    "m3": os.getenv("M3_PLACEHOLDER", "<m3>"),
+    "m4": os.getenv("M4_PLACEHOLDER", "<m4>"),
+    "m5": os.getenv("M5_PLACEHOLDER", "<m5>"),
+    "m6": os.getenv("M6_PLACEHOLDER", "<m6>"),
+    "m7": os.getenv("M7_PLACEHOLDER", "<m7>"),
+    "m8": os.getenv("M8_PLACEHOLDER", "<m8>"),
+    "m9": os.getenv("M9_PLACEHOLDER", "<m9>"),
+    "m10": os.getenv("M10_PLACEHOLDER", "<m10>"),
+}
+
+# Reverse mapping for easier lookup
+PLACEHOLDER_TO_EMBEDDING_KEY = {v: k for k, v in MULTIMODAL_EMBEDDING_PLACEHOLDERS.items()}
 
 CHECKPOINT_NAMES = {
     SAFE_ADAPTER_WEIGHTS_NAME,

@@ -101,7 +101,7 @@ class WorldModelTrainer(Seq2SeqTrainer):
     @override
     def compute_loss(self, model, inputs, *args, **kwargs):
         # Add batch debugging prints
-        self._debug_print_batch(inputs)
+        # self._debug_print_batch(inputs)
 
         # Mask multimodal tokens so that loss is computed only on textual content.
         labels = inputs.get("labels")
@@ -114,6 +114,7 @@ class WorldModelTrainer(Seq2SeqTrainer):
                         mask |= labels == t_id
                     labels = labels.masked_fill(mask, IGNORE_INDEX)
                 inputs["labels"] = labels
+        self._debug_print_batch(inputs)
 
         return super().compute_loss(model, inputs, *args, **kwargs)
 

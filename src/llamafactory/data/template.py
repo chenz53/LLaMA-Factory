@@ -1734,7 +1734,7 @@ register_template(
     stop_words=["<|im_end|>"],
     replace_eos=True,
     template_class=ReasoningTemplate,
-    mm_plugin=get_mm_plugin(name="qwen3_embedding", embedding_tokens={"m1": "<m1_pad>", "m2": "<m2_pad>"}),
+    mm_plugin=get_mm_plugin(name="qwen3_embedding", embedding_tokens={"m1": "<|m1_pad|>", "m2": "<|m2_pad|>"}),
 )
 
 # copied from chatml template

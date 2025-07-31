@@ -6,7 +6,7 @@ trust_remote_code: true
 stage: wm
 do_train: true
 finetuning_type: full
-deepspeed: examples/deepspeed/ds_z0_config.json  # choices: [ds_z0_config.json, ds_z2_config.json, ds_z3_config.json]
+# deepspeed: examples/deepspeed/ds_z0_config.json  # choices: [ds_z0_config.json, ds_z2_config.json, ds_z3_config.json]
 
 ### dataset
 dataset: wm_demo
@@ -19,7 +19,7 @@ dataloader_num_workers: 4
 
 ### output
 output_dir: saves/qwen3mm-0.6b/full/sft
-logging_steps: 10
+logging_steps: 1
 save_steps: 500
 plot_loss: true
 overwrite_output_dir: true

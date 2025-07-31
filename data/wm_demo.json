@@ -1,0 +1,122 @@
+[
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    },
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    },
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    },
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    },
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    },
+    {
+        "messages": [
+            {
+                "content": "<m1>Patient at day 1.",
+                "role": "user"
+            },
+            {
+                "content": "<m2>Patient at day 2.",
+                "role": "assistant"
+            }
+        ],
+        "embeddings": {
+            "m1": [
+                "embedding_demo_data/sample_embedding_1.json"
+            ],
+            "m2": [
+                "embedding_demo_data/sample_embedding_2.json"
+            ]
+        }
+    }
+]

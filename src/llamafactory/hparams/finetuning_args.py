@@ -404,7 +404,7 @@ class FinetuningArguments(
         default=False,
         metadata={"help": "Whether or not to train model in purely bf16 precision (without AMP)."},
     )
-    stage: Literal["pt", "sft", "rm", "ppo", "dpo", "kto"] = field(
+    stage: Literal["pt", "sft", "rm", "ppo", "dpo", "kto", "wm"] = field(
         default="sft",
         metadata={"help": "Which stage will be performed in training."},
     )
@@ -443,6 +443,23 @@ class FinetuningArguments(
     disable_shuffling: bool = field(
         default=False,
         metadata={"help": "Whether or not to disable the shuffling of the training set."},
+    )
+    # World model specific arguments
+    embedding_loss_weight: float = field(
+        default=1.0,
+        metadata={"help": "Weight for the embedding reconstruction loss in world model training."},
+    )
+    lm_loss_weight: float = field(
+        default=0.1,
+        metadata={"help": "Weight for the language modeling loss in world model training."},
+    )
+    embedding_dim: int = field(
+        default=4,
+        metadata={"help": "Dimension of embeddings for world model training."},
+    )
+    world_model_loss_type: Literal["l1", "l2"] = field(
+        default="l2",
+        metadata={"help": "Type of reconstruction loss for world model training (l1 or l2)."},
     )
     early_stopping_steps: Optional[int] = field(
         default=None,

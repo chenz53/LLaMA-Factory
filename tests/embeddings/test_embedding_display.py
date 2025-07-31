@@ -8,7 +8,6 @@ JSON files to final model inputs using the qwen3_embedding plugin.
 """
 
 import json
-import torch
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any, Union
@@ -18,26 +17,18 @@ import os
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from llamafactory.data.mm_plugin import get_mm_plugin
-from llamafactory.data.template import get_template_and_fix_tokenizer
-from llamafactory.model import load_tokenizer
-from llamafactory.hparams import get_infer_args
-
-
-def get_test_embedding_plugin():
-    """Get the qwen3_embedding plugin configured for testing"""
-    return get_mm_plugin(
-        name="qwen3_embedding", image_token=None, video_token=None, audio_token=None, embedding_tokens={"m1": "<m1>", "m2": "<m2>"}
-    )
-
-
-def display_json_structure():
-    """Display the structure of the embedding demo JSON files"""
-    print("🗂️  JSON FILE STRUCTURE")
+def display_json_structure_simple():
+    """Display the structure of the wm_demo.json file - simplified version"""
+    print("🗂️  WM_DEMO.JSON FILE STRUCTURE")
     print("=" * 60)
 
-    # Load the main demo file
-    demo_file_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "embedding_demo.json")
+    # Load the main demo file - using wm_demo.json
+    demo_file_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "wm_demo.json")
+    
+    if not os.path.exists(demo_file_path):
+        print(f"❌ Demo file not found: {demo_file_path}")
+        return
+        
     with open(demo_file_path, "rb") as f:
         demo_data = json.load(f)
 
@@ -51,25 +42,61 @@ def display_json_structure():
     example = demo_data[0]
     print(f"   Messages: {len(example['messages'])} messages")
     for i, msg in enumerate(example["messages"]):
-        print(f"     {i + 1}. {msg['role']}: {msg['content'][:50]}...")
-    print(f"   Embeddings: {example['embeddings']}")
+        print(f"     {i + 1}. {msg['role']}: {msg['content']}")
+    print(f"   Embeddings structure: {type(example['embeddings'])}")
+    print(f"   Embedding modalities: {list(example['embeddings'].keys())}")
     print()
 
-    # Load and display individual embedding files
+    # Load and display individual embedding files from the modality mapping
     print("📁 Individual embedding files:")
-    for i, embedding_file in enumerate(example["embeddings"]):
-        full_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", embedding_file)
-        with open(full_path, "rb") as f:
-            embedding_data = json.load(f)
+    for modality, embedding_files in example["embeddings"].items():
+        print(f"   Modality '{modality}':")
+        for i, embedding_file in enumerate(embedding_files):
+            full_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", embedding_file)
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as f:
+                    embedding_data = json.load(f)
 
-        print(f"   {i + 1}. {embedding_file}:")
-        print(f"      Shape: {embedding_data['shape']}")
-        print(f"      Description: {embedding_data['description']}")
-        print(f"      Modality: {embedding_data['modality']}")
-        print(f"      Num tokens: {embedding_data['num_tokens']}")
-        print(f"      Embedding dim: {embedding_data['embedding_dim']}")
-        print(f"      Sample values: {embedding_data['embedding'][0][:4]}...")
-        print()
+                print(f"     {i + 1}. {embedding_file}:")
+                print(f"        Shape: {embedding_data['shape']}")
+                print(f"        Description: {embedding_data['description']}")
+                print(f"        Modality: {embedding_data['modality']}")
+                # Calculate num_tokens and embedding_dim from shape
+                shape = embedding_data['shape']
+                num_tokens = shape[0] if len(shape) > 0 else 0
+                embedding_dim = shape[1] if len(shape) > 1 else 0
+                print(f"        Num tokens: {num_tokens}")
+                print(f"        Embedding dim: {embedding_dim}")
+                print(f"        Sample values: {embedding_data['embedding'][0][:4]}...")
+            else:
+                print(f"     {i + 1}. {embedding_file}: ❌ FILE NOT FOUND")
+            print()
+
+# Only import PyTorch-dependent modules if we need the full functionality
+try:
+    import torch
+    TORCH_AVAILABLE = True
+    
+    from llamafactory.data.mm_plugin import get_mm_plugin
+    from llamafactory.data.template import get_template_and_fix_tokenizer
+    from llamafactory.model import load_tokenizer
+    from llamafactory.hparams import get_infer_args
+    
+except ImportError as e:
+    print(f"⚠️  PyTorch dependencies not available: {e}")
+    print("   Running in simplified mode - showing JSON structure only")
+    TORCH_AVAILABLE = False
+
+
+def get_test_embedding_plugin():
+    """Get the qwen3_embedding plugin configured for testing"""
+    return get_mm_plugin(
+        name="qwen3_embedding",
+        image_token=None,
+        video_token=None,
+        audio_token=None,
+        embedding_tokens={"m1": "<m1>", "m2": "<m2>"},
+    )
 
 
 def display_regularization_process():
@@ -197,9 +224,18 @@ def display_batching_example():
     mm_inputs = plugin._get_mm_inputs(images=[], videos=[], audios=[], embeddings=embeddings, processor=None)
 
     print("🎯 Final batched result:")
-    embeddings_tensor = mm_inputs["embeddings"]
-    print(f"   Final tensor shape: {embeddings_tensor.shape}")
-    print(f"   Final tensor:\n{embeddings_tensor}")
+    embeddings_data = mm_inputs["embeddings"]
+    if isinstance(embeddings_data, dict):
+        # Handle case where embeddings is a dictionary
+        print(f"   Final embeddings structure: {type(embeddings_data)}")
+        print(f"   Keys: {list(embeddings_data.keys())}")
+        for key, tensor in embeddings_data.items():
+            print(f"   '{key}' tensor shape: {tensor.shape}")
+            print(f"   '{key}' tensor:\n{tensor}")
+    else:
+        # Handle case where embeddings is a single tensor
+        print(f"   Final tensor shape: {embeddings_data.shape}")
+        print(f"   Final tensor:\n{embeddings_data}")
     print(f"   Shape metadata: {mm_inputs['embedding_shapes']}")
 
 
@@ -212,7 +248,8 @@ def display_integration_example():
     print()
 
     print("1️⃣ Data Loading:")
-    print("   • Dataset contains 'embeddings' field pointing to JSON files")
+    print("   • Dataset contains 'embeddings' field with modality token mapping")
+    print("   • Structure: {'m1': ['file1.json'], 'm2': ['file2.json'], ...}")
     print("   • Each JSON file contains 'embedding' array and metadata")
     print("   • Files are loaded in converter.py and processor classes")
     print()
@@ -221,6 +258,7 @@ def display_integration_example():
     print("   • _regularize_embeddings converts JSON to PyTorch tensors")
     print("   • Shape validation and tensor creation occurs")
     print("   • Multiple embeddings are prepared for batching")
+    print("   • Modality tokens (m1, m2, etc.) map to specific embedding files")
     print()
 
     print("3️⃣ Data Collation:")
@@ -240,6 +278,7 @@ def display_integration_example():
     print("   • Model receives embeddings alongside text tokens")
     print("   • Embeddings can represent any modality (text, audio, video, sensors)")
     print("   • Model processes embeddings according to its architecture")
+    print("   • Modality tokens in text are replaced with corresponding embeddings")
     print()
 
 
@@ -249,36 +288,47 @@ def main():
     print("=" * 70)
     print()
 
-    # Check if demo files exist
-    demo_file = os.path.join(os.path.dirname(__file__), "..", "..", "data", "embedding_demo.json")
+    # Check if demo files exist - updated to use wm_demo.json
+    demo_file = os.path.join(os.path.dirname(__file__), "..", "..", "data", "wm_demo.json")
     if not os.path.exists(demo_file):
         print(f"❌ Demo file not found: {demo_file}")
         print("Please ensure the embedding demo files are available in the data directory.")
         return
 
     try:
-        display_json_structure()
-        print("\n" + "=" * 70 + "\n")
+        # Always show the JSON structure
+        display_json_structure_simple()
+        
+        if TORCH_AVAILABLE:
+            print("\n" + "=" * 70 + "\n")
+            display_regularization_process()
+            print("\n" + "=" * 70 + "\n")
 
-        display_regularization_process()
-        print("\n" + "=" * 70 + "\n")
+            display_multimodal_inputs()
+            print("\n" + "=" * 70 + "\n")
 
-        display_multimodal_inputs()
-        print("\n" + "=" * 70 + "\n")
+            display_batching_example()
+            print("\n" + "=" * 70 + "\n")
 
-        display_batching_example()
-        print("\n" + "=" * 70 + "\n")
+            display_integration_example()
 
-        display_integration_example()
-
-        print("✅ SUMMARY:")
-        print("=" * 70)
-        print("• Embeddings are loaded from JSON files with 'embedding' field")
-        print("• _regularize_embeddings converts them to PyTorch tensors")
-        print("• Final mm_inputs contains 'embeddings' and 'embedding_shapes' keys")
-        print("• Multiple embeddings are batched/stacked for efficient processing")
-        print("• Ready for integration with any multimodal model architecture")
-        print("• Supports arbitrary modalities beyond just image/video/audio")
+            print("✅ SUMMARY:")
+            print("=" * 70)
+            print("• Embeddings are loaded from JSON files via modality token mapping")
+            print("• Structure: {'m1': ['file1.json'], 'm2': ['file2.json'], ...}")
+            print("• _regularize_embeddings converts them to PyTorch tensors")
+            print("• Final mm_inputs contains 'embeddings' and 'embedding_shapes' keys")
+            print("• Multiple embeddings are batched/stacked for efficient processing")
+            print("• Ready for integration with any multimodal model architecture")
+            print("• Supports arbitrary modalities beyond just image/video/audio")
+        else:
+            print("\n" + "=" * 70 + "\n")
+            print("✅ SIMPLIFIED SUMMARY:")
+            print("=" * 70)
+            print("• wm_demo.json structure analyzed successfully")
+            print("• Embeddings organized by modality tokens (m1, m2, etc.)")
+            print("• Each modality maps to a list of embedding JSON files")
+            print("• For full processing demo, ensure PyTorch dependencies are available")
 
     except Exception as e:
         print(f"❌ Error during demonstration: {e}")

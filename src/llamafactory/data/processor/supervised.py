@@ -41,7 +41,9 @@ class SupervisedDatasetProcessor(DatasetProcessor):
         audios: list["AudioInput"],
         embeddings: list["EmbeddingInput"],
     ) -> tuple[list[int], list[int]]:
-        messages = self.template.mm_plugin.process_messages(prompt + response, images, videos, audios, embeddings, self.processor)
+        messages = self.template.mm_plugin.process_messages(
+            prompt + response, images, videos, audios, embeddings, self.processor
+        )
         input_ids, labels = self.template.mm_plugin.process_token_ids(
             [], [], images, videos, audios, embeddings, self.tokenizer, self.processor
         )
@@ -133,7 +135,14 @@ class PackedSupervisedDatasetProcessor(SupervisedDatasetProcessor):
         # build inputs with format `<bos> X1 Y1 <eos> <bos> X2 Y2 <eos>`
         # and labels with format `<ignore> ... <ignore> Y1 <eos> <ignore> ... <ignore> Y2 <eos>`
         valid_num = 0
-        batch_input_ids, batch_labels, batch_images, batch_videos, batch_audios, batch_embeddings = [], [], [], [], [], []
+        batch_input_ids, batch_labels, batch_images, batch_videos, batch_audios, batch_embeddings = (
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
         lengths = []
         length2indexes = defaultdict(list)
         for i in range(len(examples["_prompt"])):

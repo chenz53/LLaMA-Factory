@@ -22,11 +22,18 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from transformers import Seq2SeqTrainer
 from typing_extensions import override
 
 from ...extras import logging
-from ...extras.constants import IGNORE_INDEX, IMAGE_PLACEHOLDER, VIDEO_PLACEHOLDER, AUDIO_PLACEHOLDER, MULTIMODAL_EMBEDDING_PLACEHOLDERS
+from ...extras.constants import (
+    IGNORE_INDEX,
+    IMAGE_PLACEHOLDER,
+    VIDEO_PLACEHOLDER,
+    AUDIO_PLACEHOLDER,
+    MULTIMODAL_EMBEDDING_PLACEHOLDERS,
+)
 from ...extras.packages import is_transformers_version_greater_than
 from ..callbacks import SaveProcessorCallback
 from ..trainer_utils import create_custom_optimizer, create_custom_scheduler
@@ -59,6 +66,17 @@ class WorldModelTrainer(Seq2SeqTrainer):
             self.processing_class: PreTrainedTokenizer = kwargs.get("tokenizer")
 
         super().__init__(**kwargs)
+        # Ensure a predictor head exists for next-embedding prediction
+        hidden_size = getattr(self.model.config, "hidden_size", None)
+        if hidden_size is None:
+            hidden_size = getattr(self.model.config, "n_embd", None)
+        if hidden_size is None and hasattr(self.model, "get_output_embeddings"):
+            hidden_size = self.model.get_output_embeddings().weight.size(1)
+        if not hasattr(self.model, "next_embedding_head"):
+            self.model.next_embedding_head = torch.nn.Linear(hidden_size, hidden_size, bias=False).to(
+                self.model.device
+            )
+
         if processor is not None:
             # avoid wrong loss under gradient accumulation
             # https://github.com/huggingface/transformers/pull/36044#issuecomment-2746657112
@@ -98,6 +116,60 @@ class WorldModelTrainer(Seq2SeqTrainer):
 
         return super()._get_train_sampler(*args, **kwargs)
 
+    def compute_sft_loss(self, outputs, labels):
+        """Compute standard language modeling (SFT) loss using label_smoother when available."""
+        if self.label_smoother is not None and labels is not None:
+            return self.label_smoother(outputs, labels)
+        else:
+            return outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+    def compute_next_embedding_loss(
+        self,
+        hidden_states: torch.Tensor,
+        input_ids: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> torch.Tensor:
+        """Predict the assistant embedding representation from user embedding representation.
+
+        hidden_states: (bsz, seq_len, hidden_size) from the last layer
+        input_ids:     (bsz, seq_len)
+        labels:        (bsz, seq_len) original (unmasked) labels to distinguish user vs assistant tokens
+        """
+        if hidden_states is None or labels is None:
+            return torch.tensor(0.0, device=next(self.model.parameters()).device)
+
+        device = hidden_states.device
+        loss = torch.tensor(0.0, device=device)
+
+        tokenizer = getattr(self, "processing_class", None) or getattr(self, "tokenizer", None)
+
+        # Use *all* non-padding tokens (include standard tokens and embedded-token placeholders).
+        pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else -1
+        non_pad_mask = input_ids != pad_token_id
+
+        # Separate user vs assistant positions based on label mask
+        user_mask = non_pad_mask & (labels == IGNORE_INDEX)
+        ass_mask = non_pad_mask & (labels != IGNORE_INDEX)
+
+        preds, targets = [], []
+        for b in range(input_ids.size(0)):
+            if user_mask[b].any() and ass_mask[b].any():
+                user_vec = hidden_states[b][user_mask[b]].mean(dim=0)
+                with torch.no_grad():
+                    target_vec = hidden_states[b][ass_mask[b]].mean(dim=0)
+                pred_vec = self.model.next_embedding_head(user_vec)
+                preds.append(pred_vec)
+                targets.append(target_vec)
+
+        if preds:
+            pred_stack = torch.stack(preds)
+            target_stack = torch.stack(targets)
+            if self.finetuning_args.world_model_loss_type == "l1":
+                loss = F.l1_loss(pred_stack, target_stack)
+            else:
+                loss = F.mse_loss(pred_stack, target_stack)
+        return loss
+
     @override
     def compute_loss(self, model, inputs, *args, **kwargs):
         # Add batch debugging prints
@@ -116,7 +188,26 @@ class WorldModelTrainer(Seq2SeqTrainer):
                 inputs["labels"] = labels
         self._debug_print_batch(inputs)
 
-        return super().compute_loss(model, inputs, *args, **kwargs)
+        # Forward pass with hidden states
+        outputs = model(**inputs, output_hidden_states=True)
+
+        # Compute individual losses
+        sft_loss = self.compute_sft_loss(outputs, inputs.get("labels"))
+        hidden_states = (
+            outputs.hidden_states[-1]
+            if hasattr(outputs, "hidden_states") and outputs.hidden_states is not None
+            else None
+        )
+        embedding_loss = self.compute_next_embedding_loss(hidden_states, inputs["input_ids"], inputs.get("labels"))
+
+        total_loss = (
+            self.finetuning_args.lm_loss_weight * sft_loss
+            + self.finetuning_args.embedding_loss_weight * embedding_loss
+        )
+
+        if kwargs.get("return_outputs", False):
+            return total_loss, outputs
+        return total_loss
 
     def _get_mm_token_ids(self) -> list[int]:
         """Return cached list of multimodal token ids to ignore in loss."""
@@ -136,7 +227,8 @@ class WorldModelTrainer(Seq2SeqTrainer):
         # Retrieve additional tokens from the active multimodal plugin, if any
         mm_plugin = (
             getattr(getattr(self.data_collator, "template", None), "mm_plugin", None)
-            if hasattr(self, "data_collator") else None
+            if hasattr(self, "data_collator")
+            else None
         )
         if mm_plugin is not None:
             for attr in ("image_token", "video_token", "audio_token"):

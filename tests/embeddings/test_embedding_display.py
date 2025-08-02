@@ -17,6 +17,7 @@ import os
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
+
 def display_json_structure_simple():
     """Display the structure of the wm_demo.json file - simplified version"""
     print("🗂️  WM_DEMO.JSON FILE STRUCTURE")
@@ -24,11 +25,11 @@ def display_json_structure_simple():
 
     # Load the main demo file - using wm_demo.json
     demo_file_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "wm_demo.json")
-    
+
     if not os.path.exists(demo_file_path):
         print(f"❌ Demo file not found: {demo_file_path}")
         return
-        
+
     with open(demo_file_path, "rb") as f:
         demo_data = json.load(f)
 
@@ -62,7 +63,7 @@ def display_json_structure_simple():
                 print(f"        Description: {embedding_data['description']}")
                 print(f"        Modality: {embedding_data['modality']}")
                 # Calculate num_tokens and embedding_dim from shape
-                shape = embedding_data['shape']
+                shape = embedding_data["shape"]
                 num_tokens = shape[0] if len(shape) > 0 else 0
                 embedding_dim = shape[1] if len(shape) > 1 else 0
                 print(f"        Num tokens: {num_tokens}")
@@ -72,16 +73,18 @@ def display_json_structure_simple():
                 print(f"     {i + 1}. {embedding_file}: ❌ FILE NOT FOUND")
             print()
 
+
 # Only import PyTorch-dependent modules if we need the full functionality
 try:
     import torch
+
     TORCH_AVAILABLE = True
-    
+
     from llamafactory.data.mm_plugin import get_mm_plugin
     from llamafactory.data.template import get_template_and_fix_tokenizer
     from llamafactory.model import load_tokenizer
     from llamafactory.hparams import get_infer_args
-    
+
 except ImportError as e:
     print(f"⚠️  PyTorch dependencies not available: {e}")
     print("   Running in simplified mode - showing JSON structure only")
@@ -298,7 +301,7 @@ def main():
     try:
         # Always show the JSON structure
         display_json_structure_simple()
-        
+
         if TORCH_AVAILABLE:
             print("\n" + "=" * 70 + "\n")
             display_regularization_process()

@@ -116,59 +116,71 @@ class WorldModelTrainer(Seq2SeqTrainer):
 
         return super()._get_train_sampler(*args, **kwargs)
 
-    def compute_sft_loss(self, outputs, labels):
-        """Compute standard language modeling (SFT) loss using label_smoother when available."""
-        if self.label_smoother is not None and labels is not None:
-            return self.label_smoother(outputs, labels)
-        else:
-            return outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-
-    def compute_next_embedding_loss(
+    def compute_next_embedding_prediction_loss(
         self,
         hidden_states: torch.Tensor,
-        input_ids: torch.Tensor,
-        labels: torch.Tensor,
+        inputs: dict[str, Any],
     ) -> torch.Tensor:
-        """Predict the assistant embedding representation from user embedding representation.
+        """Compute reconstruction loss between predictor output and base LM hidden states.
 
-        hidden_states: (bsz, seq_len, hidden_size) from the last layer
-        input_ids:     (bsz, seq_len)
-        labels:        (bsz, seq_len) original (unmasked) labels to distinguish user vs assistant tokens
+        The predictor tries to reconstruct *assistant* token embeddings given the *full* context
+        where those tokens were replaced by a learnable `<mask_token>`.  We:
+        1. Build a list of index tensors (`target_masks`) – positions where `labels != IGNORE_INDEX`.
+        2. Run the model's `predictor` on the *same* input sequence (with modality connectors).
+        3. Extract predicted hidden states at the target positions and compare against the frozen
+           target hidden states from `hidden_states` (detach so gradients only flow through the
+           predictor).
         """
-        if hidden_states is None or labels is None:
+        # Preconditions ---------------------------------------------------------------------
+        if hidden_states is None or "labels" not in inputs or self.finetuning_args.embedding_loss_weight == 0:
             return torch.tensor(0.0, device=next(self.model.parameters()).device)
 
-        device = hidden_states.device
-        loss = torch.tensor(0.0, device=device)
+        if not hasattr(self.model, "predictor"):
+            # Safety fallback – use zero loss if predictor not present
+            return torch.tensor(0.0, device=hidden_states.device)
 
+        labels: torch.Tensor = inputs["labels"]  # (B, S)
+        batch_size, seq_len, _ = hidden_states.size()
+
+        # ---------------------------------------------------------------- build masks ------
+        target_masks: list[torch.Tensor] = []
+        for b in range(batch_size):
+            idx = torch.nonzero(labels[b] != IGNORE_INDEX, as_tuple=False).flatten()
+            target_masks.append(idx)
+
+        # If no assistant tokens anywhere, skip
+        if all(m.numel() == 0 for m in target_masks):
+            return torch.tensor(0.0, device=hidden_states.device)
+
+        # ---------------------------------------------------------------- predictor forward -
         tokenizer = getattr(self, "processing_class", None) or getattr(self, "tokenizer", None)
+        pad_token_id = tokenizer.pad_token_id if tokenizer is not None else -1
 
-        # Use *all* non-padding tokens (include standard tokens and embedded-token placeholders).
-        pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else -1
-        non_pad_mask = input_ids != pad_token_id
+        attention_mask = inputs.get("attention_mask")
+        if attention_mask is None:
+            attention_mask = inputs["input_ids"].ne(pad_token_id).long()
 
-        # Separate user vs assistant positions based on label mask
-        user_mask = non_pad_mask & (labels == IGNORE_INDEX)
-        ass_mask = non_pad_mask & (labels != IGNORE_INDEX)
+        pred_outputs = self.model.predictor(
+            inputs_embeds=hidden_states,
+            target_mask=target_masks,
+            attention_mask=attention_mask,
+        )
+        pred_hidden = pred_outputs.last_hidden_state  # (B, S, D)
 
+        # ---------------------------------------------------------------- collect vectors ---
         preds, targets = [], []
-        for b in range(input_ids.size(0)):
-            if user_mask[b].any() and ass_mask[b].any():
-                user_vec = hidden_states[b][user_mask[b]].mean(dim=0)
-                with torch.no_grad():
-                    target_vec = hidden_states[b][ass_mask[b]].mean(dim=0)
-                pred_vec = self.model.next_embedding_head(user_vec)
-                preds.append(pred_vec)
-                targets.append(target_vec)
+        for b, idx in enumerate(target_masks):
+            if idx.numel() > 0:
+                preds.append(pred_hidden[b, idx])
+                targets.append(hidden_states[b, idx].detach())
 
-        if preds:
-            pred_stack = torch.stack(preds)
-            target_stack = torch.stack(targets)
-            if self.finetuning_args.world_model_loss_type == "l1":
-                loss = F.l1_loss(pred_stack, target_stack)
-            else:
-                loss = F.mse_loss(pred_stack, target_stack)
-        return loss
+        pred_stack = torch.cat(preds, dim=0)
+        target_stack = torch.cat(targets, dim=0)
+
+        if self.finetuning_args.world_model_loss_type == "l1":
+            return F.l1_loss(pred_stack, target_stack)
+        else:
+            return F.mse_loss(pred_stack, target_stack)
 
     @override
     def compute_loss(self, model, inputs, *args, **kwargs):
@@ -191,14 +203,19 @@ class WorldModelTrainer(Seq2SeqTrainer):
         # Forward pass with hidden states
         outputs = model(**inputs, output_hidden_states=True)
 
-        # Compute individual losses
-        sft_loss = self.compute_sft_loss(outputs, inputs.get("labels"))
+        # SFT loss is already computed inside the model's forward pass
+        sft_loss = (
+            outputs.loss if getattr(outputs, "loss", None) is not None else torch.tensor(0.0, device=self.model.device)
+        )
+
         hidden_states = (
             outputs.hidden_states[-1]
             if hasattr(outputs, "hidden_states") and outputs.hidden_states is not None
             else None
         )
-        embedding_loss = self.compute_next_embedding_loss(hidden_states, inputs["input_ids"], inputs.get("labels"))
+
+        # World-model reconstruction loss (predictor)
+        embedding_loss = self.compute_next_embedding_prediction_loss(hidden_states, inputs)
 
         total_loss = (
             self.finetuning_args.lm_loss_weight * sft_loss

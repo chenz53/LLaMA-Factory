@@ -19,15 +19,15 @@ def _create_small_config() -> Qwen3WMConfig:
         eos_token_id=151645,
         head_dim=128,
         hidden_act="silu",
-        hidden_size=1024,
+        hidden_size=128,
         initializer_range=0.02,
-        intermediate_size=3072,
+        intermediate_size=256,
         max_position_embeddings=40960,
         max_window_layers=28,
         model_type="qwen3_wm",
-        num_attention_heads=16,
-        num_hidden_layers=28,
-        num_key_value_heads=8,
+        num_attention_heads=4,
+        num_hidden_layers=2,
+        num_key_value_heads=4,
         rms_norm_eps=1e-06,
         rope_scaling=None,
         rope_theta=1000000,
@@ -36,15 +36,15 @@ def _create_small_config() -> Qwen3WMConfig:
         torch_dtype="bfloat16",
         use_cache=True,
         use_sliding_window=False,
-        vocab_size=151936,
+        vocab_size=32,
         # Predictor overrides (keep it tiny as well)
         predictor_config={
-            "dim": 1024,
-            "hidden_size": 32,
+            "dim": 128,
+            "hidden_size": 128,
             "num_hidden_layers": 1,
             "num_attention_heads": 4,
             "num_key_value_heads": 4,
-            "intermediate_size": 64,
+            "intermediate_size": 256,
             "hidden_act": "silu",
             "rms_norm_eps": 1e-6,
             "attention_dropout": 0.0,
@@ -55,19 +55,19 @@ def _create_small_config() -> Qwen3WMConfig:
             "sliding_window": None,
             "use_sliding_window": False,
             "use_cache": False,
-            "vocab_size": 151936,
+            "vocab_size": 0,
             "initializer_range": 0.02,
         },
         m1_config={
             "dim": 128,
-            "hidden_size": 1024,
-            "intermediate_size": 512,
+            "hidden_size": 128,
+            "intermediate_size": 256,
             "hidden_act": "silu",
         },
         m2_config={
             "dim": 128,
-            "hidden_size": 1024,
-            "intermediate_size": 512,
+            "hidden_size": 128,
+            "intermediate_size": 256,
             "hidden_act": "silu",
         },
     )
@@ -105,21 +105,20 @@ def test_predictor_forward():
     config = _create_small_config()
     model = Qwen3WM(config)
     predictor = model.predictor  # type: ignore
-    batch, seq_len = 2, 8
+    batch, seq_len = 2, 4
     hidden_states = torch.randn(batch, seq_len, config.hidden_size)
 
     # context = even indices, target = odd indices
-    context_mask = [torch.tensor([0, 1, 2, 3]), torch.tensor([0, 1, 2, 3])]
-    target_mask = [torch.tensor([4, 5, 6, 7]), torch.tensor([4, 5, 6])]
-    attention_mask = torch.tensor([[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 0]])
+    # context_mask = [torch.tensor([0, 1, 2, 3]), torch.tensor([0, 1, 2, 3])]
+    target_mask = torch.tensor([[0, 0, 1, 1], [0, 0, 1, 0]])
+    attention_mask = torch.tensor([[1, 1, 1, 1], [1, 1, 1, 0]])
 
     out = predictor(
         inputs_embeds=hidden_states,
-        context_mask=context_mask,
         target_mask=target_mask,
         attention_mask=attention_mask,
     )
-    print(out.last_hidden_state.shape)
+    print(out.last_hidden_state)
     assert out.last_hidden_state.shape[-1] == config.hidden_size
     # number of rows equals total target tokens across batch
     # assert out.last_hidden_state.shape[0] == batch * target_mask[0].numel()

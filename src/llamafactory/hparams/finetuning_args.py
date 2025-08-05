@@ -458,7 +458,7 @@ class FinetuningArguments(
         metadata={"help": "Dimension of embeddings for world model training."},
     )
     world_model_loss_type: Literal["l1", "l2"] = field(
-        default="l2",
+        default="l1",
         metadata={"help": "Type of reconstruction loss for world model training (l1 or l2)."},
     )
     early_stopping_steps: Optional[int] = field(

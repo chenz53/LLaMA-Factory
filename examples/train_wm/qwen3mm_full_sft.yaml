@@ -1,5 +1,5 @@
 ### model
-model_name_or_path: standardmodelbio/Qwen3-MM-0.6B
+model_name_or_path: standardmodelbio/Qwen3-WM-0.6B
 trust_remote_code: true
 
 ### method
@@ -10,7 +10,7 @@ finetuning_type: full
 
 ### dataset
 dataset: wm_demo
-template: qwen3_embedding
+template: qwen3_wm
 cutoff_len: 2048
 max_samples: 1000
 overwrite_cache: true
@@ -18,7 +18,7 @@ preprocessing_num_workers: 16
 dataloader_num_workers: 4
 
 ### output
-output_dir: saves/qwen3mm-0.6b/full/sft
+output_dir: saves/qwen3wm-0.6b/full/sft
 logging_steps: 1
 save_steps: 500
 plot_loss: true

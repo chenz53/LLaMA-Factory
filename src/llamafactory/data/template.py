@@ -1722,7 +1722,7 @@ register_template(
 
 # copied from qwen template
 register_template(
-    name="qwen3_embedding",
+    name="qwen3_wm",
     format_user=StringFormatter(slots=["<|im_start|>user\n{{content}}<|im_end|>\n<|im_start|>assistant\n"]),
     format_assistant=StringFormatter(slots=["{{content}}<|im_end|>\n"]),
     format_system=StringFormatter(slots=["<|im_start|>system\n{{content}}<|im_end|>\n"]),
@@ -1734,7 +1734,7 @@ register_template(
     stop_words=["<|im_end|>"],
     replace_eos=True,
     template_class=ReasoningTemplate,
-    mm_plugin=get_mm_plugin(name="qwen3_embedding", embedding_tokens={"m1": "<|m1_pad|>", "m2": "<|m2_pad|>"}),
+    mm_plugin=get_mm_plugin(name="qwen3_wm", embedding_tokens={"m1": "<|m1_pad|>", "m2": "<|m2_pad|>"}),
 )
 
 # copied from chatml template

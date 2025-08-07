@@ -28,6 +28,7 @@ The script uses the embedding_demo.json dataset as an example.
 import os
 import sys
 
+
 # Add the src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 

@@ -2,7 +2,6 @@ from typing import Callable, Optional, Union
 
 import torch
 from torch import nn
-
 from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.generation import GenerationMixin
@@ -16,6 +15,7 @@ from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from transformers.processing_utils import Unpack
 from transformers.utils import TransformersKwargs, auto_docstring, can_return_tuple
 from transformers.utils.generic import check_model_inputs
+
 from .configuration_qwen3_wm import Qwen3WMConfig
 
 
@@ -600,14 +600,14 @@ class Qwen3WM(Qwen3PreTrainedModel, GenerationMixin):
                 continue
 
             # Project/merge embeddings
-            merged_embeds = self.connectors[f"{modality_key}_connector"](embeddings.to(inputs_embeds.dtype))
+            merged_embeds = self.connectors[f"{modality_key}_connector"](embeddings)
 
             # Replace token embeddings with merged embeddings
             mask = input_ids == token_id
             mask_expanded = mask.unsqueeze(-1).expand_as(inputs_embeds)
-            inputs_embeds.masked_scatter(
-                mask_expanded.to(inputs_embeds.device),
-                merged_embeds.to(inputs_embeds.device, inputs_embeds.dtype),
+            inputs_embeds.masked_scatter_(
+                mask_expanded,
+                merged_embeds.to(inputs_embeds.dtype),
             )
 
         return inputs_embeds

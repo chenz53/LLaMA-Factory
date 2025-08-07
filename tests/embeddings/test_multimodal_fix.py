@@ -4,11 +4,13 @@ Test script to verify the multimodal embedding fix works correctly.
 This script tests that embeddings with different shapes are properly organized by modality.
 """
 
-import sys
-import os
-import torch
 import json
+import os
+import sys
 import tempfile
+
+import torch
+
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))

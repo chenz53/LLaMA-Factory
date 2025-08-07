@@ -533,9 +533,9 @@ class MMPluginMixin:
             mm_inputs["embedding_shapes"] = embedding_data["shapes"]
 
             # Keep additional metadata for backward compatibility and debugging
-            mm_inputs["embeddings_by_type"] = embeddings_by_type
+            # mm_inputs["embeddings_by_type"] = embeddings_by_type
             mm_inputs["shapes_by_type"] = shapes_by_type
-            mm_inputs["embedding_types"] = embedding_types
+            # mm_inputs["embedding_types"] = embedding_types
 
         return mm_inputs
 

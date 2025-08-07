@@ -10,20 +10,21 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import torch
 from datasets import Dataset
 from transformers import AutoTokenizer
 
+
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from llamafactory.data.converter import SharegptDatasetConverter
+from llamafactory.data.mm_plugin import get_mm_plugin
 from llamafactory.data.processor.supervised import SupervisedDatasetProcessor
 from llamafactory.data.template import get_template_and_fix_tokenizer
-from llamafactory.data.mm_plugin import get_mm_plugin
 from llamafactory.hparams import DataArguments, ModelArguments
 from llamafactory.model import load_tokenizer
 

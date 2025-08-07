@@ -28,11 +28,11 @@ from typing_extensions import override
 
 from ...extras import logging
 from ...extras.constants import (
+    AUDIO_PLACEHOLDER,
     IGNORE_INDEX,
     IMAGE_PLACEHOLDER,
-    VIDEO_PLACEHOLDER,
-    AUDIO_PLACEHOLDER,
     MULTIMODAL_EMBEDDING_PLACEHOLDERS,
+    VIDEO_PLACEHOLDER,
 )
 from ...extras.packages import is_transformers_version_greater_than
 from ..callbacks import SaveProcessorCallback

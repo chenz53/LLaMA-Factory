@@ -8,11 +8,13 @@ JSON files to final model inputs using the qwen3_embedding plugin.
 """
 
 import json
-import numpy as np
-from pathlib import Path
-from typing import Dict, List, Any, Union
-import sys
 import os
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Union
+
+import numpy as np
+
 
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -82,8 +84,8 @@ try:
 
     from llamafactory.data.mm_plugin import get_mm_plugin
     from llamafactory.data.template import get_template_and_fix_tokenizer
-    from llamafactory.model import load_tokenizer
     from llamafactory.hparams import get_infer_args
+    from llamafactory.model import load_tokenizer
 
 except ImportError as e:
     print(f"⚠️  PyTorch dependencies not available: {e}")

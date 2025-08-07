@@ -5,8 +5,9 @@ This shows the key data structures and formats without requiring full pipeline e
 """
 
 import json
+from typing import Any, Dict, List
+
 import torch
-from typing import Dict, List, Any
 
 
 def show_embedding_file_format():

@@ -6,6 +6,7 @@ Debug script for world model training to isolate issues step by step.
 import os
 import sys
 
+
 # Add the src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 

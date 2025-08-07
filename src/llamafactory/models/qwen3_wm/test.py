@@ -1,5 +1,6 @@
-from transformers import AutoConfig, AutoModelForCausalLM
 import torch
+from transformers import AutoConfig, AutoModelForCausalLM
+
 
 config = AutoConfig.from_pretrained("standardmodelbio/Qwen3-WM-0.6B", trust_remote_code=True)
 print(config)

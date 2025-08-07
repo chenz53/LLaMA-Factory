@@ -2,7 +2,7 @@
   {
     "messages": [
       {
-        "content": "<m1>What does this text embedding represent?",
+        "content": "<m1><m1>What does this text embedding represent?",
         "role": "user"
       },
       {
@@ -12,7 +12,8 @@
     ],
     "embeddings": {
       "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
+        "ecg_embeddings/deid_3.json",
+        "ecg_embeddings/deid_3.json"
       ]
     }
   },
@@ -29,189 +30,7 @@
     ],
     "embeddings": {
       "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "Compare these two embeddings: <m1> and <m2>",
-        "role": "user"
-      },
-      {
-        "content": "The first embedding represents a simple greeting text with ascending values, while the second represents machine learning concepts with more complex patterns. They have different token lengths (2 vs 3) but the same embedding dimension (8).",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ],
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m1>What does this text embedding represent?",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a simple greeting text 'Hello, world!' with 2 tokens and 8-dimensional vectors.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m2>Analyze this document embedding for me.",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a document about machine learning concepts with 3 tokens and 8-dimensional vectors. The embedding structure shows semantic relationships between different concepts.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "Compare these two embeddings: <m1> and <m2>",
-        "role": "user"
-      },
-      {
-        "content": "The first embedding represents a simple greeting text with ascending values, while the second represents machine learning concepts with more complex patterns. They have different token lengths (2 vs 3) but the same embedding dimension (8).",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ],
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m1>What does this text embedding represent?",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a simple greeting text 'Hello, world!' with 2 tokens and 8-dimensional vectors.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m2>Analyze this document embedding for me.",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a document about machine learning concepts with 3 tokens and 8-dimensional vectors. The embedding structure shows semantic relationships between different concepts.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "Compare these two embeddings: <m1> and <m2>",
-        "role": "user"
-      },
-      {
-        "content": "The first embedding represents a simple greeting text with ascending values, while the second represents machine learning concepts with more complex patterns. They have different token lengths (2 vs 3) but the same embedding dimension (8).",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ],
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m1>What does this text embedding represent?",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a simple greeting text 'Hello, world!' with 2 tokens and 8-dimensional vectors.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "<m2>Analyze this document embedding for me.",
-        "role": "user"
-      },
-      {
-        "content": "This embedding represents a document about machine learning concepts with 3 tokens and 8-dimensional vectors. The embedding structure shows semantic relationships between different concepts.",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
-      ]
-    }
-  },
-  {
-    "messages": [
-      {
-        "content": "Compare these two embeddings: <m1> and <m2>",
-        "role": "user"
-      },
-      {
-        "content": "The first embedding represents a simple greeting text with ascending values, while the second represents machine learning concepts with more complex patterns. They have different token lengths (2 vs 3) but the same embedding dimension (8).",
-        "role": "assistant"
-      }
-    ],
-    "embeddings": {
-      "m1": [
-        "embedding_demo_data/sample_embedding_1.json"
-      ],
-      "m2": [
-        "embedding_demo_data/sample_embedding_2.json"
+        "ecg_embeddings/deid_3.json"
       ]
     }
   }

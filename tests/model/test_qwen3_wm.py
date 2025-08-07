@@ -6,6 +6,7 @@ are intentionally lightweight so they can run inside the CI in <10 s on CPU.
 """
 
 import torch
+
 from llamafactory.models.qwen3_wm.configuration_qwen3_wm import Qwen3WMConfig
 from llamafactory.models.qwen3_wm.modeling_qwen3_wm import Qwen3WM
 

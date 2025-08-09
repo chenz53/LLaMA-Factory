@@ -232,8 +232,8 @@ class MMPluginMixin:
                 f"The number of audios does not match the number of {AUDIO_PLACEHOLDER} tokens in {messages}."
             )
 
-        print(f"embeddings: {embeddings}")
-        print(f"num_embedding_tokens: {num_embedding_tokens}")
+        # print(f"embeddings: {embeddings}")
+        # print(f"num_embedding_tokens: {num_embedding_tokens}")
         if len(embeddings) != num_embedding_tokens:
             raise ValueError(
                 f"The number of embeddings does not match the number of multimodal embedding tokens in {messages}."

@@ -101,7 +101,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
     @override
     def compute_loss(self, model, inputs, *args, **kwargs):
         # Add batch debugging prints
-        self._debug_print_batch(inputs)
+        # self._debug_print_batch(inputs)
         return super().compute_loss(model, inputs, *args, **kwargs)
 
     def _debug_print_batch(self, inputs: dict[str, Any]) -> None:

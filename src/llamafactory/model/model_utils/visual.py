@@ -328,3 +328,6 @@ _register_composite_model(
 _register_composite_model(
     model_type="video_llava",
 )
+
+
+_register_composite_model(model_type="qwen3_wm", projector_key="connectors", language_model_keys=["model", "lm_head"])

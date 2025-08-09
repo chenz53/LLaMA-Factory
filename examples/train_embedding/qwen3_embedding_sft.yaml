@@ -1,43 +1,47 @@
 ### model
-model_name_or_path: standardmodelbio/Qwen3-WM-0.6B  # or any qwen3-compatible model
+model_name_or_path: standardmodelbio/Qwen3-WM-4B  # or any qwen3-compatible model
 trust_remote_code: true
+flash_attn: fa2
 
 ### method
 stage: sft
 do_train: true
 finetuning_type: full
+freeze_multi_modal_projector: false
+freeze_language_model: true
 
 ### dataset
-dataset: embedding_demo
-media_dir: /home/user/
+dataset: mimic_iv_ecg
+media_dir: /home/user/data
 template: qwen3_wm
 cutoff_len: 2048
-max_samples: 1000
 overwrite_cache: true
 preprocessing_num_workers: 16
 dataloader_num_workers: 4
 
 ### output
-output_dir: saves/qwen3-wm/full/sft
+output_dir: saves/qwen3-wm/sft/4b
 logging_steps: 10
 save_steps: 500
-plot_loss: true
+save_total_limit: 1
+plot_loss: false
 overwrite_output_dir: true
 save_only_model: false
-report_to: none  # choices: [none, wandb, tensorboard, swanlab, mlflow]
+report_to: wandb  # choices: [none, wandb, tensorboard, swanlab, mlflow]
 
 ### train
-per_device_train_batch_size: 2
-gradient_accumulation_steps: 1
-learning_rate: 1.0e-4
+per_device_train_batch_size: 32
+gradient_accumulation_steps: 2
+learning_rate: 1.0e-5
+weight_decay: 0.01
 num_train_epochs: 1.0
 lr_scheduler_type: cosine
-warmup_ratio: 0.1
+warmup_ratio: 0.01
 bf16: true
 ddp_timeout: 180000000
 
 ### eval
-# val_size: 0.1
-# per_device_eval_batch_size: 1
-# eval_strategy: steps
-# eval_steps: 500 
+val_size: 0.1
+per_device_eval_batch_size: 64
+eval_strategy: steps
+eval_steps: 500

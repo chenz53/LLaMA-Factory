@@ -10,6 +10,13 @@ The main entry point is `inference.py`, which:
 
 ---
 
+## Install dependencies (pysierraecg):
+
+```bash
+cd scripts/ecg_fm/pysierraecg
+pip install -e .
+```
+
 Notes:
 - GPU is optional but recommended. Install a CUDA build of PyTorch if available.
 - `sierraecg` is used to read ECG files (e.g., Philips/GE XML). Ensure your data is compatible.
